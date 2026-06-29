@@ -1,1 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle Solver</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background-color: #f4f4f9; color: #333; }
+        h1 { text-align: center; color: #2e7d32; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .error { color: #c62828; background: #ffebee; padding: 10px; border-radius: 4px; font-weight: bold; text-align: center;}
+        .suggestions { display: flex; gap: 10px; justify-content: space-around; margin: 15px 0; }
+        .badge { background: #e0f2f1; color: #004d40; padding: 10px 20px; border-radius: 4px; font-weight: bold; font-size: 1.1em; }
+        .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1.1em; }
+        .btn-primary { background: #2e7d32; color: white; margin-top: 10px; }
+        .btn-danger { background: #c62828; color: white; float: right; width: auto; font-size: 0.9em; padding: 8px 12px; }
+        .form-group { margin-bottom: 15px; text-align: center; }
 
+        /* Direct Inline Tile Layout (Input Boxes) */
+        .tile-container { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
+        
+        .wordle-tile-input {
+            width: 55px;
+            height: 55px;
+            font-size: 1.8em;
+            font-weight: bold;
+            color: white;
+            background-color: #787c7e;
+            text-align: center;
+            text-transform: uppercase;
+            border: 2px solid #565758;
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+            caret-color: transparent;
+        }
+
+        /* Color States for both inputs and progress grids */
+        .color-b { background-color: #787c7e; border-color: #787c7e; color: white; }
+        .color-y { background-color: #c9b458; border-color: #c9b458; color: white; }
+        .color-g { background-color: #6aaa64; border-color: #6aaa64; color: white; }
+
+        /* Styles for the Progress History Wordle Row Grid */
+        .history-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin: 10px 0;
+            align-items: center;
+        }
+        .history-tile {
+            width: 40px;
+            height: 40px;
+            font-size: 1.3em;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .attempt-label {
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #666;
+            width: 80px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Unwordle</h1>
+
+    <div class="card">
+        <form method="POST" style="display:inline;">
+            <button type="submit" name="action" value="reset" class="btn btn-danger">Reset Solver</button>
+        </form>
+        <p><strong>Candidates remaining:</strong> {{ candidates_count }}</p>
+        {% if possible_words %}
+            <p><strong>Possible words:</strong> {{ possible_words|join(', ')|upper }}</p>
+        {% endif %}
+    </div>
+
+    {% if error %}
+        <p class="error">⚠️ {{ error }}</p>
+    {% endif %}
+
+    {% if history %}
+    <div class="card" style="text-align: center;">
+        <h3 style="margin-top: 0;">Your Progress</h3>
+        <div style="display: inline-block; text-align: left;">
+            {% for turn in history %}
+                <div class="history-row">
+                    <div class="attempt-label">Turn {{ loop.index }}:</div>
+                    <div class="history-tile color-{{ turn.feedback[0] }}">{{ turn.guess[0] }}</div>
+                    <div class="history-tile color-{{ turn.feedback[1] }}">{{ turn.guess[1] }}</div>
+                    <div class="history-tile color-{{ turn.feedback[2] }}">{{ turn.guess[2] }}</div>
+                    <div class="history-tile color-{{ turn.feedback[3] }}">{{ turn.guess[3] }}</div>
+                    <div class="history-tile color-{{ turn.feedback[4] }}">{{ turn.guess[4] }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not game_over %}
+    <div class="card">
+        <h3>💡 Top Guesses</h3>
+        <div class="suggestions">
+            {% for opt in top_options %}
+                <div class="badge" onclick="window.fillSuggestedWord('{{ opt }}')" style="cursor: pointer;" title="Click to fill this word">
+                    #{{ loop.index }}: {{ opt|upper }}
+                </div>
+            {% endfor %}
+        </div>
+
+        <form method="POST" id="wordle-form">
+            <div class="form-group">
+                <label style="display:block; margin-bottom:10px; font-weight:bold;">
+                    
+                
+                </label>
+                
+                <div class="tile-container">
+                    <input type="text" class="wordle-tile-input color-b" data-index="0" data-state="b" maxlength="1" autocomplete="off" required>
+                    <input type="text" class="wordle-tile-input color-b" data-index="1" data-state="b" maxlength="1" autocomplete="off" required>
+                    <input type="text" class="wordle-tile-input color-b" data-index="2" data-state="b" maxlength="1" autocomplete="off" required>
+                    <input type="text" class="wordle-tile-input color-b" data-index="3" data-state="b" maxlength="1" autocomplete="off" required>
+                    <input type="text" class="wordle-tile-input color-b" data-index="4" data-state="b" maxlength="1" autocomplete="off" required>
+                </div>
+            </div>
+
+            <input type="hidden" id="guess" name="guess" value="">
+            <input type="hidden" id="feedback" name="feedback" value="bbbbb">
+
+            <button type="submit" name="action" value="submit" class="btn btn-primary">Submit Turn</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="card" style="text-align: center; background: #e8f5e9; border: 2px solid #2e7d32;">
+        <h2>Game Over!</h2>
+        <form method="POST">
+            <button type="submit" name="action" value="reset" class="btn btn-primary" style="max-width: 200px; margin: 10px auto; display: block;">Play Another Round</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <script>
+        const inputs = document.querySelectorAll('.wordle-tile-input');
+        const guessHidden = document.getElementById('guess');
+        const feedbackHidden = document.getElementById('feedback');
+        const states = ['b', 'y', 'g'];
+
+        function compileFormData() {
+            let fullGuess = "";
+            let fullFeedback = "";
+            inputs.forEach(input => {
+                fullGuess += (input.value || "-").toLowerCase();
+                fullFeedback += input.getAttribute('data-state') || "b";
+            });
+            if (guessHidden) guessHidden.value = fullGuess;
+            if (feedbackHidden) feedbackHidden.value = fullFeedback;
+        }
+
+        window.fillSuggestedWord = function(word) {
+            inputs.forEach((input, index) => {
+                if (word[index]) {
+                    input.value = word[index].toUpperCase();
+                }
+            });
+            compileFormData();
+            if (inputs[4]) inputs[4].focus();
+        };
+
+        inputs.forEach((input, idx) => {
+            input.addEventListener('input', (e) => {
+                input.value = input.value.toUpperCase(); 
+                compileFormData();
+                if (input.value.length === 1 && idx < inputs.length - 1) {
+                    inputs[idx + 1].focus(); 
+                }
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace') {
+                    if (input.value === '' && idx > 0) {
+                        inputs[idx - 1].focus();
+                        inputs[idx - 1].value = '';
+                    } else {
+                        input.value = '';
+                    }
+                    compileFormData();
+                    e.preventDefault();
+                }
+            });
+
+            input.addEventListener('click', (e) => {
+                e.preventDefault();
+                let currentState = input.getAttribute('data-state') || 'b';
+                let nextIndex = (states.indexOf(currentState) + 1) % states.length;
+                let nextState = states[nextIndex];
+
+                input.setAttribute('data-state', nextState);
+                input.className = `wordle-tile-input color-${nextState}`;
+                compileFormData();
+            });
+        });
+
+        document.getElementById('wordle-form')?.addEventListener('submit', (e) => {
+            compileFormData();
+            if (guessHidden.value.includes("-") || guessHidden.value.length < 5) {
+                alert("Please fill out all 5 letters before submitting.");
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const initialBadge = document.querySelector('.badge');
+            if (initialBadge) {
+                const cleanWord = initialBadge.textContent.split(':').pop().trim().toLowerCase();
+                window.fillSuggestedWord(cleanWord);
+            } else {
+                compileFormData();
+            }
+        });
+    </script>
+
+</body>
+</html>
