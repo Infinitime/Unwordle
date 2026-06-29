@@ -1,5 +1,24 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 import solver_backend as sb
+import webbrowser
+from threading import Timer
+from flask import Flask, render_template, request, redirect, url_for, session
+import solver_backend as sb
+
+app = Flask(__name__)
+# ... (your existing app.py setup code) ...
+
+def open_browser():
+    """Opens the local browser window automatically."""
+    webbrowser.open_new("http://127.0.0.1:5000/")
+
+if __name__ == "__main__":
+    # Give the Flask server 1.5 seconds to start up, then launch the browser
+    Timer(1.5, open_browser).start()
+    
+    # Run the application locally (turn off debug mode for production packaging)
+    app.run(debug=False, port=5000)
+
 
 app = Flask(__name__)
 
